@@ -1,29 +1,31 @@
 import tables
 import tensorflow as tf
-from keras.optimizers import SGD, Adam
-from keras.models import Sequential, Model
+from keras.optimizers import SGD
+from keras.models import Sequential
 from keras.layers.convolutional import Convolution2D
 from keras.layers.core import Activation
 from keras.layers.core import Flatten
 from keras.layers.core import Dense, Dropout
 from keras.layers import BatchNormalization
-from sklearn.preprocessing import MinMaxScaler
-import numpy as np
-from labeling import label_15
 
 CLASSES = 15
-EPOCHS = 100
+EPOCHS = 10
 BATCH_SIZE = 128
 OPT = SGD(lr=0.01)
 ACTIVATION = "elu"
-LOSS_FUNCTION = tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True) #'mse'
-LABELING = 'CATEGORICAL' #'float'
+LOSS_FUNCTION = tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True)
+DATA_FILE_ID = 0
+VALIDATION_DATA_FILE_ID = 1
+
 
 def get_model():
     model = Sequential()
-    model.add(Convolution2D(20, (5, 5), input_shape=(12, 8, 8), data_format='channels_first', padding='same', activation=ACTIVATION))
+    model.add(Convolution2D(100, (8, 8), input_shape=(12, 8, 8), data_format='channels_first', padding='valid',
+                            activation=ACTIVATION))
     model.add(BatchNormalization())
-    model.add(Convolution2D(50, (3, 3), data_format='channels_first', padding='same', activation=ACTIVATION))
+    model.add(Convolution2D(50, (5, 5), data_format='channels_first', padding='valid', activation=ACTIVATION))
+    model.add(BatchNormalization())
+    model.add(Convolution2D(50, (5, 5), data_format='channels_first', padding='valid', activation=ACTIVATION))
     model.add(BatchNormalization())
     model.add(Dropout(0.3))
     model.add(Flatten())
@@ -34,60 +36,56 @@ def get_model():
     return model
 
 
-def get_data(low, high, percent):
-    pos_file = tables.open_file(f"D:\\leguan_data\\training_data\\train_positions_0.hdf5", mode='r')
-    eval_file = tables.open_file(f"D:\\leguan_data\\training_data\\train_evals_0.hdf5", mode='r')
+def batch_generator(batch_size, file_id):
+    pos_file = tables.open_file(f"D:\\leguan_data\\training_data\\train_positions_{file_id}.hdf5", mode='r')
+    eval_file = tables.open_file(f"D:\\leguan_data\\training_data\\new_evals_{file_id}.hdf5", mode='r')
 
-    train_data = pos_file.root.data[low:(high*percent)]
-    validation_data = pos_file.root.data[(high*percent):high]
-    train_labels = eval_file.root.data[low:(high*percent)]
-    validation_labels = eval_file.root.data[(high*percent):high]
+    len = get_file_length(file_id)
+    i = 0
+    while True:
+        try:
+            data = pos_file.root.data[i * batch_size:(i + 1) * batch_size]
+            labels = eval_file.root.test[i * batch_size:(i + 1) * batch_size]
+        except tables.exceptions.NoSuchNodeError:
+            return
 
-    if(LABELING == 'float'):
-        train_labels = train_labels.reshape(-1, 1)
-        validation_labels = validation_labels.reshape(-1, 1)
-        scaler = MinMaxScaler(-1,1)
-        scaler.fit(train_labels)
-        scaler.transform(train_labels)
-        scaler.transform(validation_labels)
-    elif(LABELING == 'CATEGORICAL'):
-        vec = np.vectorize(label_15)
-
-        train_labels = vec(train_labels)
-        validation_labels = vec(validation_labels)
-
-
-    train_tensors = tf.convert_to_tensor(train_data, dtype=tf.float16)
-    train_labels = tf.convert_to_tensor(train_labels, dtype=tf.float16)
-
-    train_dataset = tf.data.Dataset.from_tensor_slices((train_tensors, train_labels))
-    train_dataset = train_dataset.shuffle(10000)
-    train_dataset = train_dataset.batch(BATCH_SIZE)
-
-    validation_tensors = tf.convert_to_tensor(validation_data, dtype=tf.float16)
-    validation_labels = tf.convert_to_tensor(validation_labels, dtype=tf.float16)
-
-    validation_dataset = tf.data.Dataset.from_tensor_slices((validation_tensors, validation_labels))
-    validation_dataset = validation_dataset.shuffle(10000)
-    validation_dataset = validation_dataset.batch(BATCH_SIZE)
+        i += 1
+        if i == int(len / batch_size):
+            i = 0
+        res = (data, labels)
+        yield res
 
     pos_file.close()
     eval_file.close()
 
-    return train_dataset, validation_dataset
+
+def get_file_length(id):
+    eval_file = tables.open_file(f"D:\\leguan_data\\training_data\\new_evals_{id}.hdf5", mode='r')
+    len = len(eval_file.root.data)
+    eval_file.close()
+    return len
 
 
-if __name__ == '__main__':
+def main():
     physical_devices = tf.config.experimental.list_physical_devices('GPU')
     assert len(physical_devices) > 0, "Not enough GPU hardware devices available"
     config = tf.config.experimental.set_memory_growth(physical_devices[0], True)
 
-    train_data, validation_data = get_data(0, 100000, 0.9)
+    gen = batch_generator(BATCH_SIZE, DATA_FILE_ID)
+    valid_gen = batch_generator(BATCH_SIZE, VALIDATION_DATA_FILE_ID)
 
-    print(train_data)
-    print(validation_data)
+    steps = int(get_file_length(DATA_FILE_ID) / BATCH_SIZE)
+    validation_steps = int(steps / 10)
+
     model = get_model()
 
     model.summary()
-    model.fit(train_data, epochs=EPOCHS, verbose=1, shuffle=True, validation_data=validation_data)
+
+    model.fit_generator(gen, epochs=EPOCHS, verbose=1, shuffle=True, steps_per_epoch=steps, validation_data=valid_gen,
+                        validation_steps=validation_steps)
+
     model.save('D:\\leguan_data\\leguan_models\\leguan_model.hdf5')
+
+
+if __name__ == '__main__':
+    main()
