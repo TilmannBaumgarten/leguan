@@ -1,7 +1,13 @@
 import numpy as np
 import chess
-from network import batch_generator
-
+import filemanager
+import tensorflow as tf
+import keras
+import seaborn
+import pandas
+import matplotlib.pyplot as plt
+from sklearn.metrics import confusion_matrix
+from sklearn.metrics import ConfusionMatrixDisplay
 
 def get_piece_from_id(id):
     if id == 0:
@@ -56,10 +62,24 @@ def get_board_from_bitmap(bitboard, flip):
     return board
 
 
+
 if __name__ == '__main__':
-    gen = batch_generator(1, 0)
-    for x in range(5):
-        bitboard, eval = next(gen)[0]
-        board = get_board_from_bitmap(bitboard, False)
-        print(board)
-        print(eval)
+    physical_devices = tf.config.experimental.list_physical_devices('GPU')
+    assert len(physical_devices) > 0, "Not enough GPU hardware devices available"
+    config = tf.config.experimental.set_memory_growth(physical_devices[0], True)
+
+    model = keras.models.load_model('D:\\leguan_data\\leguan_models\\leguan_model.hdf5')
+
+    f1, f2 = filemanager.open_files(2)
+    gen = filemanager.batch_generator(100000, f1, f2)
+    bitboards, true_labels = next(gen)
+    predict_labels = predict_bitboards(bitboards, model)
+
+    #df = pandas.DataFrame({'label': predict_labels})
+
+    conf_matr = confusion_matrix(true_labels, predict_labels)
+    display = ConfusionMatrixDisplay(conf_matr).plot()
+    #plot = seaborn.countplot(x = 'label', data = df)
+    plt.savefig("mygraph.png")
+
+    filemanager.close_files([f1, f2])
