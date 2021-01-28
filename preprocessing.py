@@ -5,6 +5,7 @@ from multiprocessing import Process
 import numpy as np
 import time
 import tables
+import math
 
 PieceList = [chess.PAWN, chess.KNIGHT, chess.BISHOP, chess.ROOK, chess.QUEEN, chess.KING]
 
@@ -62,8 +63,8 @@ def create_files():
     atom = tables.Atom.from_dtype(np.dtype('float16'))
 
     for x in range(6):
-        pos_file = tables.open_file(f"D:\\leguan_data\\training_data\\train_positions_{x}.hdf5", mode='w')
-        eval_file = tables.open_file(f"D:\\leguan_data\\training_data\\train_evals_{x}.hdf5", mode='w')
+        pos_file = tables.open_file(f"D:\\leguan_data\\float_training_data\\train_positions_{x}.hdf5", mode='w')
+        eval_file = tables.open_file(f"D:\\leguan_data\\float_training_data\\train_evals_{x}.hdf5", mode='w')
 
         pos_file.create_earray(pos_file.root, 'data', atom, (0, 12, 8, 8))
         eval_file.create_earray(eval_file.root, 'data', atom, (0,))
@@ -73,8 +74,8 @@ def create_files():
 
 
 def to_file(bitboard, label, pid):
-    pos_file = tables.open_file(f"D:\\leguan_data\\training_data\\train_positions_{pid}.hdf5", mode='a')
-    eval_file = tables.open_file(f"D:\\leguan_data\\training_data\\train_evals_{pid}.hdf5", mode='a')
+    pos_file = tables.open_file(f"D:\\leguan_data\\float_training_data\\train_positions_{pid}.hdf5", mode='a')
+    eval_file = tables.open_file(f"D:\\leguan_data\\float_training_data\\train_evals_{pid}.hdf5", mode='a')
 
     pos_file.root.data.append([bitboard])
     eval_file.root.data.append([label])
@@ -101,6 +102,10 @@ def get_bitmap(board):
     return bitmap
 
 
+def sigmoid(x):
+    return 1 / (1 + math.exp(-x))
+
+
 def process_game(game):
     processed_game = []
 
@@ -117,7 +122,17 @@ def process_game(game):
         if curr_node.eval():
             eval = curr_node.eval()
 
-        label = get_label(eval, board.turn)
+        # label = get_label(eval, board.turn)
+
+        label = str(eval.pov(board.turn))
+
+        if '#-' in label:
+            label = -15000
+        elif '#' in label:
+            label = 15000
+        label = int(label)
+        label = label / 100
+        # end"""
 
         tuple = [bitmap, label]
         processed_game.append(tuple)
@@ -142,6 +157,8 @@ def listener(queue, pid):
     while True:
         [bitboard, label] = queue.get()
         to_file(bitboard, label, pid)
+
+
 
 
 if __name__ == '__main__':
@@ -178,3 +195,4 @@ if __name__ == '__main__':
 
     for l in listeners:
         l.kill()
+

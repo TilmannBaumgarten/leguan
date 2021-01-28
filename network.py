@@ -11,24 +11,24 @@ import filemanager
 EPOCHS = 10
 BATCH_SIZE = 128
 OPT = SGD(lr=0.01)
-ACTIVATION = "relu"
-LOSS_FUNCTION = tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True)
+ACTIVATION = "elu"
+LOSS_FUNCTION = 'msle'#tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True)
 
 
 def get_model():
     model = Sequential()
-    model.add(Convolution2D(128, (8, 8), input_shape=(12, 8, 8), data_format='channels_first', padding='same', activation=ACTIVATION))
+    #model.add(Convolution2D(128, (8, 8),  data_format='channels_first', padding='same', activation=ACTIVATION))
+    #model.add(BatchNormalization())
+    model.add(Convolution2D(20, (5, 5), input_shape=(12, 8, 8), padding='same', data_format='channels_first', activation=ACTIVATION))
     model.add(BatchNormalization())
-    model.add(Convolution2D(64, (5, 5), padding='same', data_format='channels_first', activation=ACTIVATION))
-    model.add(BatchNormalization())
-    model.add(Convolution2D(32, (3, 3), padding='same', data_format='channels_first', activation=ACTIVATION))
+    model.add(Convolution2D(50, (3, 3), padding='same', data_format='channels_first', activation=ACTIVATION))
     model.add(BatchNormalization())
     model.add(Dropout(0.3))
     model.add(Flatten())
     model.add(Dense(250, activation=ACTIVATION))
-    model.add(Dense(15))
-    model.add(Activation('softmax'))
-    model.compile(loss=LOSS_FUNCTION, optimizer=OPT, metrics=['accuracy'])
+    model.add(Dense(1, activation='linear'))
+    #model.add(Activation('softmax'))
+    model.compile(loss=LOSS_FUNCTION, optimizer=OPT, metrics=['r_square'])
     return model
 
 
@@ -50,7 +50,7 @@ def main():
 
     model.summary()
 
-    model.fit_generator(gen, epochs=EPOCHS, verbose=1, shuffle=True, steps_per_epoch=steps, validation_data=valid_gen, validation_steps=validation_steps)
+    model.fit(gen, epochs=EPOCHS, verbose=1, shuffle=True, steps_per_epoch=steps, validation_data=valid_gen, validation_steps=validation_steps)
 
     model.save('D:\\leguan_data\\leguan_models\\leguan_model_1.2.hdf5')
 

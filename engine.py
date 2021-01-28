@@ -8,16 +8,16 @@ import math
 physical_devices = tf.config.experimental.list_physical_devices('GPU')
 assert len(physical_devices) > 0, "Not enough GPU hardware devices available"
 config = tf.config.experimental.set_memory_growth(physical_devices[0], True)
-engine = keras.models.load_model('D:\\leguan_data\\leguan_models\\leguan_model_1.0.hdf5')
-
+engine = keras.models.load_model('D:\\leguan_data\\leguan_models\\leguan_model_1.2.hdf5')
 
 
 def predict_bitboards(bitboards, model):
-    bitboards = tf.reshape(bitboards, (1,-1,12,8,8))
+    bitboards = tf.reshape(bitboards, (1, -1, 12, 8, 8))
     eval = model.predict(tuple(bitboards))
-    eval = eval.argmax(axis=-1)
+    #eval = eval.argmax(axis=-1)
 
     return eval
+
 
 def evaluate_board(board, model):
     bitboard = get_bitmap(board)
@@ -28,6 +28,7 @@ def evaluate_board(board, model):
     eval = eval.argmax(axis=-1)
 
     return eval[0]
+
 
 def derLeguan(board):
     bitboards = []
@@ -69,13 +70,15 @@ def derLeguan(board):
             sum = sum + evaluations[counter]
 
             if evaluations[counter] < eval_after_best_reply:
-
                 best_reply = elem
                 eval_after_best_reply = evaluations[counter]
 
             counter += 1
 
-        avg_eval_after_move = sum/len(dict[move])
+        if len(dict[move]) == 0:
+            return move;
+
+        avg_eval_after_move = sum / len(dict[move])
 
         if eval_after_best_reply > best_curr_eval:
             best_curr_avg = avg_eval_after_move
@@ -96,7 +99,7 @@ def derLeguan(board):
     print(best_curr_eval)
     print(best_curr_avg)"""
 
-"""if __name__ == '__main__':
-    board = chess.Board('rnbqk1r1/pp1nbppp/4p3/1BPpP3/5P2/2N2N2/PPP3PP/R1BQK2R b KQq - 0 8')
-    derLeguan(board, engine)"""
 
+if __name__ == '__main__':
+    board = chess.Board('rn2k2r/pp1bbppp/5n2/3p4/3P4/1N1KPP2/P2Q2PP/q1q4R b kq - 0 15')
+    print(derLeguan(board))
